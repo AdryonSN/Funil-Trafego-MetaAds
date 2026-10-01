@@ -1,0 +1,53 @@
+name: Build & Deploy Dashboard
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ refresh ]
+  schedule:
+    # Backup: a cada 2h (UTC). O gatilho principal é o cron-job.org via repository_dispatch.
+    - cron: "15 */2 * * *"
+
+# Permissões mínimas para publicar no GitHub Pages (usa o GITHUB_TOKEN do run,
+# NÃO o seu PAT pessoal).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Nunca deixa dois deploys concorrerem; o mais novo vence.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build (lê a planilha e gera dist/)
+        run: node build.js
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
