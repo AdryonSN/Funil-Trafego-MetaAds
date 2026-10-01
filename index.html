@@ -644,15 +644,15 @@ function render(){
   document.getElementById("hero").innerHTML = `
     <div class="hcard"><div class="hk">💸 Investimento <small>em R$</small></div>
       <div class="hv">${M.money(cur.spend)}</div><div class="hd">${miniDelta(cur.spend,prev.spend,null)} vs anterior</div></div>
-    <div class="op">→</div>
+    <div class="op">·</div>
+    <div class="hcard cac"><div class="hk">🎯 CAC <small>custo por venda</small></div>
+      <div class="hv">${M.money(cur.cac)}</div><div class="hd">${miniDelta(cur.cac,prev.cac,false)} vs anterior</div></div>
+    <div class="op">·</div>
     <div class="hcard"><div class="hk">💰 Receita</div>
       <div class="hv g">${M.money(cur.rev)}</div><div class="hd">${miniDelta(cur.rev,prev.rev,true)} vs anterior</div></div>
     <div class="op">=</div>
     <div class="hcard roas"><div class="hk">📈 ROAS <small>retorno</small></div>
-      <div class="hv">${M.x(cur.roas)}</div><div class="hd">${miniDelta(cur.roas,prev.roas,true)} vs anterior</div></div>
-    <div class="op">·</div>
-    <div class="hcard cac"><div class="hk">🎯 CAC <small>custo por venda</small></div>
-      <div class="hv">${M.money(cur.cac)}</div><div class="hd">${miniDelta(cur.cac,prev.cac,false)} vs anterior</div></div>`;
+      <div class="hv">${M.x(cur.roas)}</div><div class="hd">${miniDelta(cur.roas,prev.roas,true)} vs anterior</div></div>`;
 
   /* ---- funil (esquerda) ---- */
   renderFunnel(cur);
