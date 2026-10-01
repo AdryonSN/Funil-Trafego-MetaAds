@@ -291,7 +291,7 @@ footer a{color:var(--series-1)}
     <div>
       <div class="brandlock" aria-label="Funil de Tráfego — Meta Ads">
         <span class="mc-pill">Meta Ads</span>
-        <div class="wordmark">FUNIL<span class="hy">·</span>TRÁFEGO<span class="ul"></span></div>
+        <div class="wordmark">CR<span class="hy">-</span>2026<span class="hy">-</span>NOV<span class="ul"></span></div>
       </div>
       <h1 id="title">Funil de Tráfego</h1>
       <p class="sub" id="subtitle">carregando…</p>
@@ -579,50 +579,6 @@ function miniDelta(cur, prev, better){
   return `<span style="color:${col};font-weight:600">${ar} ${nf1.format(Math.abs(ch)*100)}%</span>`;
 }
 
-/* ============================================================ saúde geral
-   Sem número de CAC do cliente, a régua é o PONTO DE EQUILÍBRIO: teto de CAC =
-   ticket médio do período inteiro → ROAS mínimo = 1,0x (receita cobre a mídia).
-   Edite ticket/cac_goal no build se quiser outra régua. */
-function bandScore(p){
-  if (p == null || !isFinite(p)) return null;
-  if (p <= 1.0)  return 100;
-  if (p <= 1.25) return 100 - ((p-1.0)/0.25)*20;
-  if (p <= 1.5)  return 80  - ((p-1.25)/0.25)*20;
-  return Math.max(0, 60 - (p-1.5)*120);
-}
-const scoreColor = s => s == null ? "var(--ink-3)" : s >= 60 ? "var(--good)" : s >= 40 ? "var(--warning)" : "var(--critical)";
-const bandLabel  = s => s == null ? "sem vendas" : s >= 80 ? "Saudável" : s >= 60 ? "Bom" : s >= 40 ? "Atenção" : "Crítico";
-
-function health(cur){
-  const T = CAC_GOAL;
-  const roasFloor = T > 0 ? TICKET / T : 1;
-  const cpcCeil = (cur.conv != null && isFinite(cur.conv)) ? T * cur.conv : null;
-  const impSale = div(cur.sales, cur.imp);
-  const cpmCeil = impSale != null ? T * impSale * 1000 : null;
-  const pctCac  = cur.cac  != null && isFinite(cur.cac)  ? cur.cac / T : null;
-  const pctRoas = cur.roas == null || !isFinite(cur.roas) ? null : (cur.roas > 0 ? roasFloor / cur.roas : 5);
-  const pctCpc  = (cur.cpc != null && cpcCeil) ? cur.cpc / cpcCeil : null;
-  const pctCpm  = (cur.cpm != null && cpmCeil) ? cur.cpm / cpmCeil : null;
-  const bars = [
-    {label:"CAC",  valueStr:M.money(cur.cac),  limitStr:`teto ${M.money(T)}`,        score:bandScore(pctCac)},
-    {label:"ROAS", valueStr:M.x(cur.roas),     limitStr:`mín ${M.x(roasFloor)}`,     score:bandScore(pctRoas)},
-    {label:"CPC",  valueStr:M.money(cur.cpc),  limitStr:cpcCeil != null ? `teto ${M.money(cpcCeil)}` : "teto —", score:bandScore(pctCpc)},
-    {label:"CPM",  valueStr:M.money(cur.cpm),  limitStr:cpmCeil != null ? `teto ${M.money(cpmCeil)}` : "teto —", score:bandScore(pctCpm)}
-  ];
-  const score = bandScore(pctCac);
-  return {score: score == null ? null : Math.round(score), band: bandLabel(score), bars};
-}
-function gauge(score, colorVar){
-  const s = (score == null || !isFinite(score)) ? 0 : score;
-  const r = 54, c = 2*Math.PI*r, off = c*(1 - s/100);
-  const disp = (score == null || !isFinite(score)) ? "—" : Math.round(score);
-  return `<div class="gauge"><svg viewBox="0 0 132 132" width="132" height="132">
-    <circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--plane)" stroke-width="12"/>
-    <circle cx="66" cy="66" r="${r}" fill="none" stroke="${colorVar}" stroke-width="12" stroke-linecap="round"
-      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
-  </svg><div class="gv"><b>${disp}</b><span>de 100</span></div></div>`;
-}
-
 /* bandas de referência pós-clique (rules-of-thumb, editáveis) */
 const FUNNEL_BANDS = {
   cr:        {label:"Clique → página (CR)",  good:0.80, bad:0.60, advice:"perda técnica — checar velocidade de carregamento e o pixel/rastreamento da página"},
@@ -684,34 +640,7 @@ function render(){
     ? `comparando com ${dayFull(pFrom)} – ${dayFull(pTo)} (${len} dia${len>1?"s":""})`
     : `${len} dia${len>1?"s":""} selecionado${len>1?"s":""}`;
 
-  /* ---- saúde geral ---- */
-  const h = health(cur);
-  const sc = scoreColor(h.score);
-  document.getElementById("health").innerHTML = `
-    ${gauge(h.score, sc)}
-    <div>
-      <p class="health-head">Saúde geral do funil
-        <span class="tag" style="background:color-mix(in srgb,${sc} 20%,transparent);color:${sc}">${h.band}</span>
-        <span style="font-size:11.5px;font-weight:500;color:var(--ink-3);margin-left:6px">${h.score == null ? "—" : h.score+"/100"} · régua: ponto de equilíbrio (ROAS 1,0x · teto de CAC ${M.money(CAC_GOAL)})</span></p>
-      <div class="hbars" style="margin-top:12px">
-        ${h.bars.map(b => {
-          const col = b.score == null ? "var(--ink-3)" : scoreColor(b.score);
-          const w = b.score == null ? 0 : Math.max(0, Math.min(100, b.score));
-          return `<div class="hbar">
-            <div class="hb-top"><em>${b.label} <span style="color:var(--ink-3);font-weight:500">· ${b.limitStr}</span></em><strong>${b.valueStr}</strong></div>
-            <div class="hb-track"><div class="hb-fill" style="width:${w.toFixed(0)}%;background:${col}"></div></div>
-          </div>`;
-        }).join("")}
-      </div>
-    </div>`;
-
   /* ---- hero: investimento → receita = roas · cac ---- */
-  const cacOk = cur.cac !== null && isFinite(cur.cac) && cur.cac <= CAC_GOAL;
-  const cacCol = (cur.cac === null || !isFinite(cur.cac)) ? "var(--ink-3)" : (cacOk ? "var(--good-text)" : "var(--critical)");
-  const cacStatus = (cur.cac === null || !isFinite(cur.cac))
-    ? `<span style="color:var(--ink-3);font-weight:600">sem vendas no período</span>`
-    : (cacOk ? `<span style="color:var(--good-text);font-weight:600">✓ dentro do teto (${M.money(CAC_GOAL)})</span>`
-             : `<span style="color:var(--critical);font-weight:600">▲ acima do teto (${M.money(CAC_GOAL)})</span>`);
   document.getElementById("hero").innerHTML = `
     <div class="hcard"><div class="hk">💸 Investimento <small>em R$</small></div>
       <div class="hv">${M.money(cur.spend)}</div><div class="hd">${miniDelta(cur.spend,prev.spend,null)} vs anterior</div></div>
@@ -722,11 +651,8 @@ function render(){
     <div class="hcard roas"><div class="hk">📈 ROAS <small>retorno</small></div>
       <div class="hv">${M.x(cur.roas)}</div><div class="hd">${miniDelta(cur.roas,prev.roas,true)} vs anterior</div></div>
     <div class="op">·</div>
-    <div class="hcard cac" style="border-top:3px solid ${cacCol}"><div class="hk">🎯 CAC <small>teto ${M.money(CAC_GOAL)}</small></div>
-      <div class="hv" style="color:${cacCol}">${M.money(cur.cac)}</div><div class="hd">${cacStatus}</div></div>`;
-  document.getElementById("heroLine").innerHTML = (cur.spend > 0 && cur.roas !== null)
-    ? `Cada <b>R$ 1,00</b> investido virou <b>${M.money(cur.roas)}</b> de receita · ${M.money(cur.spend)} → ${M.money(cur.rev)} no período${STATE.compare ? " · variações vs. período anterior" : ""}.`
-    : `Sem investimento no período selecionado.`;
+    <div class="hcard cac"><div class="hk">🎯 CAC <small>custo por venda</small></div>
+      <div class="hv">${M.money(cur.cac)}</div><div class="hd">${miniDelta(cur.cac,prev.cac,false)} vs anterior</div></div>`;
 
   document.getElementById("srcNote").innerHTML =
     `<span>📥 <b style="color:var(--ink-1)">Fonte única (somente leitura):</b> aba <b style="color:var(--ink-1)">${escape_(DATA.meta.sheet_tab)}</b> do Google Sheets. ` +
@@ -1000,7 +926,7 @@ function renderReport(){
   const perLabel = days === 1 ? dayFull(from) : `${dayFull(from)} a ${dayFull(to)} · ${days} dias`;
   const over = cur.cac != null && cur.cac > T;
   const repCac = c => c == null || !isFinite(c) ? "—" : `<b style="color:${c <= T ? "var(--good-text)" : "var(--critical)"}">${M.money(c)}</b>`;
-  const dTbl = rows => `<div class="tblwrap"><table class="daily" style="min-width:560px"><thead><tr>
+  const dTbl = rows => `<div class="tblwrap scrolly" style="max-height:360px"><table class="daily" style="min-width:560px"><thead><tr>
       <th style="text-align:left">Dia</th><th>Invest.</th><th>Vendas</th><th>Receita</th><th>CAC</th><th>ROAS</th><th>Conv.Check.</th></tr></thead>
     <tbody>${[...rows].reverse().map(r => `<tr><td style="text-align:left">${dayFull(r.d)}</td><td>${M.money(r.spend)}</td><td>${int(r.sales)}</td><td>${M.money(r.rev)}</td><td>${repCac(r.cac)}</td><td>${M.x(r.roas)}</td><td>${M.pct1(r.convCheck)}</td></tr>`).join("")}</tbody></table></div>`;
 
@@ -1049,7 +975,6 @@ function renderReport(){
         const b = ads.filter(a => a.sales > 0).sort((a,z) => (z.sales - a.sales) || (a.cac - z.cac)).slice(0, 6);
         return b.length ? b.map(a => `<div class="rep-ad">
           <div><span class="nm">${escape_(a.label)}</span> <span class="mt">· ${int(a.sales)} vendas · CAC ${M.money(a.cac)} · ${M.money(a.spend)} gastos · ROAS ${M.x(a.roas)}</span></div>
-          <input data-adlink="${encodeURIComponent(a.label)}" placeholder="cole o link do anúncio (Instagram)">
         </div>`).join("") : `<p class="rep-p muted">Sem vendas atribuídas a um anúncio específico no período.</p>`;
       })()}
     </div>`;
@@ -1179,11 +1104,6 @@ function renderReport(){
     try { t.value = localStorage.getItem(k) || ""; } catch(e){}
     t.oninput = () => { try { localStorage.setItem(k, t.value); } catch(e){} };
   });
-  document.querySelectorAll("#reportView [data-adlink]").forEach(inp => {
-    const k = "rep-adlink-" + decodeURIComponent(inp.dataset.adlink);
-    try { inp.value = localStorage.getItem(k) || ""; } catch(e){}
-    inp.oninput = () => { try { localStorage.setItem(k, inp.value); } catch(e){} };
-  });
   document.getElementById("repCopy").onclick = e => {
     const btn = e.currentTarget;
     let scratch = ""; try { scratch = (localStorage.getItem("rep-note-scratch") || "").trim(); } catch(_){}
@@ -1235,10 +1155,8 @@ function shell(){
     </div>
 
     <div id="dashView">
-    <div class="panel"><div class="health" id="health"></div></div>
 
-    <div class="hero" id="hero"></div>
-    <p class="hero-line" id="heroLine" style="margin-bottom:10px"></p>
+    <div class="hero" id="hero" style="margin-top:4px"></div>
     <div id="srcNote" style="display:flex;gap:9px;align-items:flex-start;background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 35%,transparent);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--ink-2);margin-bottom:14px"></div>
 
     <div class="grid-funnel">
