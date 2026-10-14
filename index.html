@@ -269,6 +269,16 @@ tfoot td{font-weight:650;color:var(--ink-1);border-top:1px solid var(--axis);bor
 .tree .nm{white-space:normal;line-height:1.3}
 .tree .lv0 .nm{font-weight:600}
 .tree .lv1 .nm,.tree .lv2 .nm{font-weight:450;color:var(--ink-2)}
+/* drill-down (estilo Looker): chevron de "entrar" + trilha */
+.tree td:first-child .dchev{color:var(--ink-3);margin-left:8px;font-weight:800}
+.tree tr.exp:hover>td:first-child .dchev{color:var(--brand)}
+.optcrumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;font-size:13px;color:var(--ink-2)}
+.optcrumb a{color:var(--series-1);cursor:pointer;text-decoration:none}
+.optcrumb a:hover{text-decoration:underline}
+.optcrumb .sep{color:var(--ink-3)}
+.optcrumb .cur{color:var(--ink-1);font-weight:650}
+.optcrumb .bk{appearance:none;border:1px solid var(--ring);background:var(--card);color:var(--ink-2);border-radius:7px;padding:3px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+.optcrumb .bk:hover{background:var(--plane);color:var(--ink-1)}
 
 /* ---------------------------------------------------------------- rodape */
 .warn{
@@ -344,7 +354,8 @@ const norm = s => String(s == null ? "" : s).toLowerCase().normalize("NFD").repl
 /* ============================================================ estado */
 let DATA = null, CAC_GOAL = 0, TICKET = 0;
 let STATE = {from:null, to:null, compare:true, metric:"spend", tab:"dash",
-             treeSort:{key:"spend", dir:-1}, expanded:new Set(), goal:20000, preset:"all", optSearch:""};
+             treeSort:{key:"spend", dir:-1}, expanded:new Set(), goal:20000, preset:"all", optSearch:"",
+             optView:"drill", drill:{level:0, campaign:null, adset:null}};
 
 /* ============================================================ métricas
    Fonte única: cada linha de anúncio já traz gasto, impressões, cliques,
@@ -791,7 +802,7 @@ function filterOptTree(camps, q){
   };
   return {camps:rec(camps), expand};
 }
-function renderOpt(){
+function renderOptTree(){
   let {camps} = buildTree(STATE.from, STATE.to);
   const q = (STATE.optSearch || "").trim();
   let expandSet = STATE.expanded;
@@ -841,6 +852,123 @@ function renderOpt(){
     tr.querySelector("td:first-child").onclick = () => {
       const k = decodeURIComponent(tr.dataset.key);
       if (STATE.expanded.has(k)) STATE.expanded.delete(k); else STATE.expanded.add(k);
+      renderOpt();
+    };
+  });
+  document.querySelectorAll("#tbl thead th").forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      STATE.treeSort = (key === k) ? {key:k, dir:-dir} : {key:k, dir:k === "label" ? 1 : -1};
+      renderOpt();
+    };
+  });
+}
+
+/* dispatcher: alterna entre Drill-down (padrão, estilo Looker) e Árvore */
+function renderOpt(){
+  document.querySelectorAll("[data-optview]").forEach(b => b.classList.toggle("on", b.dataset.optview === STATE.optView));
+  if (STATE.optView === "tree") renderOptTree(); else renderOptDrill();
+  renderCrumb();
+}
+
+/* ---- Drill-down: um nível por vez (campanha → conjunto → anúncio) + trilha/voltar ---- */
+function drillLevelRows(from, to){
+  const d = STATE.drill, map = new Map();
+  for (const r of DATA.ads){
+    if (r.d < from || r.d > to) continue;
+    if (d.level >= 1 && r.c !== d.campaign) continue;
+    if (d.level >= 2 && r.s !== d.adset) continue;
+    const k = d.level === 0 ? r.c : d.level === 1 ? r.s : r.a;
+    let o = map.get(k);
+    if (!o){ o = Object.assign(blank(), {label:k}); map.set(k, o); }
+    accAd(o, r);
+  }
+  return [...map.values()].map(derive);
+}
+function renderCrumb(){
+  const el = document.getElementById("optCrumb");
+  if (!el) return;
+  const d = STATE.drill;
+  if (STATE.optView !== "drill" || d.level === 0){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  let html = `<button class="bk" id="drillBack">‹ Voltar</button>`
+    + `<a data-go="0">Todas as campanhas</a><span class="sep">›</span>`;
+  if (d.level === 1) html += `<span class="cur">${escape_(d.campaign)}</span>`;
+  else html += `<a data-go="1">${escape_(d.campaign)}</a><span class="sep">›</span><span class="cur">${escape_(d.adset)}</span>`;
+  el.innerHTML = html;
+  document.getElementById("drillBack").onclick = () => {
+    STATE.drill = STATE.drill.level === 2
+      ? {level:1, campaign:STATE.drill.campaign, adset:null}
+      : {level:0, campaign:null, adset:null};
+    renderOpt();
+  };
+  el.querySelectorAll("a[data-go]").forEach(a => a.onclick = () => {
+    STATE.drill = (+a.dataset.go === 0)
+      ? {level:0, campaign:null, adset:null}
+      : {level:1, campaign:STATE.drill.campaign, adset:null};
+    renderOpt();
+  });
+}
+function renderOptDrill(){
+  const from = STATE.from, to = STATE.to;
+  // se o pai selecionado sumiu do período (ex.: troca de datas), sobe de nível
+  let d = STATE.drill;
+  if (d.level >= 1 && !DATA.ads.some(r => r.d >= from && r.d <= to && r.c === d.campaign))
+    STATE.drill = d = {level:0, campaign:null, adset:null};
+  else if (d.level >= 2 && !DATA.ads.some(r => r.d >= from && r.d <= to && r.c === d.campaign && r.s === d.adset))
+    STATE.drill = d = {level:1, campaign:d.campaign, adset:null};
+
+  let rows = drillLevelRows(from, to);
+  const q = (STATE.optSearch || "").trim();
+  if (q){ const nf = norm(q); rows = rows.filter(r => norm(r.label).includes(nf)); }
+  const {key, dir} = STATE.treeSort;
+  rows = sortNodes(rows, key, dir);
+
+  const scales = {};
+  for (const c of TCOLS.filter(c => c.scale)){
+    const vals = rows.filter(r => r.spend > 0 && r[c.k] !== null && isFinite(r[c.k])).map(r => r[c.k]);
+    if (vals.length > 1) scales[c.k] = {min:Math.min(...vals), max:Math.max(...vals), dir:c.scale};
+  }
+  const shade = (k, v) => {
+    const s = scales[k];
+    if (!s || v === null || !isFinite(v) || s.max === s.min) return "";
+    let t = (v - s.min)/(s.max - s.min);
+    if (s.dir === "low") t = 1 - t;
+    if (t < 0.15) return "";
+    return `background:color-mix(in srgb,var(--scale-ink) ${Math.round(t*32)}%,transparent)`;
+  };
+  const firstLabel = d.level === 0 ? "Campanha" : d.level === 1 ? "Conjunto" : "Anúncio";
+  const drillable = d.level < 2;
+  const head = [{k:"label", label:firstLabel}, ...METRIC_COLS].map(c => {
+    const active = key === c.k;
+    const arw = active ? (dir === 1 ? "▲" : "▼") : "▾";
+    return `<th data-k="${c.k}"${active ? " data-active" : ""} title="${c.hint || "ordenar"}">${c.label}<span class="arw">${arw}</span></th>`;
+  }).join("");
+  const rowHTML = r => `<tr class="lv0${drillable ? " exp" : ""}" data-label="${encodeURIComponent(r.label)}">
+      <td><span class="nm">${escape_(r.label)}</span>${drillable ? `<span class="dchev">›</span>` : ""}</td>
+      ${METRIC_COLS.map(c => {
+        const st = c.scale ? shade(c.k, r[c.k]) : "";
+        const v = c.fmt(r[c.k]);
+        return `<td>${st ? `<span class="cell-scale" style="${st}">${v}</span>` : v}</td>`;
+      }).join("")}
+    </tr>`;
+  const tot = derive(rows.reduce((t,r) => { for (const k of RAW) t[k] += r[k]; return t; }, blank()));
+  const scope = d.level === 0 ? `${rows.length} campanha(s)` : d.level === 1 ? `${rows.length} conjunto(s)` : `${rows.length} anúncio(s)`;
+  const emptyMsg = q ? `Nenhum resultado para “${escape_(q)}”.` : "Nenhum dado no período.";
+  document.getElementById("tbl").innerHTML = `
+    <thead><tr>${head}</tr></thead>
+    <tbody>${rows.map(rowHTML).join("") || `<tr><td colspan="${METRIC_COLS.length + 1}" style="text-align:center;color:var(--ink-3);padding:32px">${emptyMsg}</td></tr>`}</tbody>
+    <tfoot><tr><td>Total — ${scope}</td>${METRIC_COLS.map(c => `<td>${c.fmt(tot[c.k])}</td>`).join("")}</tr></tfoot>`;
+
+  renderCrumb();
+
+  if (drillable) document.querySelectorAll("#tbl tbody tr.exp").forEach(tr => {
+    tr.querySelector("td:first-child").onclick = () => {
+      const lbl = decodeURIComponent(tr.dataset.label);
+      STATE.drill = d.level === 0 ? {level:1, campaign:lbl, adset:null} : {level:2, campaign:d.campaign, adset:lbl};
+      STATE.optSearch = "";
+      const os = document.getElementById("optSearch"); if (os) os.value = "";
+      const oc = document.getElementById("optClear"); if (oc) oc.hidden = true;
       renderOpt();
     };
   });
@@ -1200,15 +1328,21 @@ function shell(){
     <div class="panel">
       <h2>Otimização — Campanha › Conjunto › Anúncio</h2>
       <p class="note">
-        Clique numa <b style="color:var(--ink-1)">campanha</b> pra abrir os conjuntos, e num conjunto pra abrir os anúncios.
-        Clique nos cabeçalhos pra ordenar e achar onde o custo por resultado é mais barato. CAC e ROAS coloridos (verde = melhor).
-        Vendas e receita já vêm atribuídas ao anúncio/conjunto/campanha de origem na planilha.
+        <b style="color:var(--ink-1)">Drill-down</b> (padrão): clique numa <b style="color:var(--ink-1)">campanha</b> pra entrar e ver só os conjuntos dela,
+        e num conjunto pra ver os anúncios — use a trilha / <b style="color:var(--ink-1)">‹ Voltar</b> pra subir.
+        <b style="color:var(--ink-1)">Árvore</b>: tudo aninhado em linhas. Clique nos cabeçalhos pra ordenar e achar onde o custo por resultado é mais barato
+        (CAC e ROAS coloridos, verde = melhor). Vendas e receita já vêm atribuídas ao anúncio/conjunto/campanha de origem na planilha.
       </p>
+      <div class="tabs" id="optViewTabs">
+        <button class="btn" data-optview="drill">Drill-down</button>
+        <button class="btn" data-optview="tree">Árvore</button>
+      </div>
       <div class="optbar">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5" stroke-linecap="round"/></svg>
         <input id="optSearch" type="search" placeholder="Filtrar por campanha, conjunto ou anúncio…" autocomplete="off" spellcheck="false">
         <button id="optClear" type="button" title="Limpar filtro" hidden>✕</button>
       </div>
+      <div class="optcrumb" id="optCrumb" hidden></div>
       <div class="tblwrap"><table id="tbl" class="tree"></table></div>
     </div>
 
@@ -1279,6 +1413,16 @@ function shell(){
     optS.oninput = () => { STATE.optSearch = optS.value; if (optClear) optClear.hidden = !optS.value; renderOpt(); };
     if (optClear) optClear.onclick = () => { optS.value = ""; STATE.optSearch = ""; optClear.hidden = true; renderOpt(); optS.focus(); };
   }
+
+  // modo da Otimização: Drill-down (padrão) × Árvore
+  try { const ov = localStorage.getItem("funnel-optview"); if (["drill","tree"].includes(ov)) STATE.optView = ov; } catch(e){}
+  document.querySelectorAll("[data-optview]").forEach(b => b.onclick = () => {
+    if (STATE.optView === b.dataset.optview) return;
+    STATE.optView = b.dataset.optview;
+    try { localStorage.setItem("funnel-optview", STATE.optView); } catch(e){}
+    STATE.optSearch = ""; if (optS) optS.value = ""; if (optClear) optClear.hidden = true;
+    renderOpt();
+  });
 
   try { const tv = localStorage.getItem("funnel-tab2"); if (["dash","report"].includes(tv)) STATE.tab = tv; } catch(e){}
   document.querySelectorAll("[data-tab]").forEach(b => {
