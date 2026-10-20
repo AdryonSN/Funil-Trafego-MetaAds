@@ -704,15 +704,15 @@ function renderFunnel(cur){
     {n:"Investimento", big:M.money(cur.spend), bg:"#8fe01e", ink:"#0c1400", goal:true,
       cl:"Investido no período", cv:M.money(cur.spend), sub:`Receita gerada <b>${M.money(cur.rev)}</b>`},
     {n:"Impressões", big:M.int(cur.imp), bg:"#7ecb1c", ink:"#0c1400",
-      cl:"CPM", cv:M.money(cur.cpm), sub:`CTR <b>${M.pct1(cur.ctr)}</b>`},
+      cl:"CPM", cv:M.money(cur.cpm), sub:""},
     {n:"Cliques", big:M.int(cur.clk), bg:"#63b015", ink:"#0c1400",
-      cl:"CPC", cv:M.money(cur.cpc), sub:`Clique → Page view <b>${M.pct1(div(cur.lpv,cur.clk))}</b>`},
+      cl:"CPC", cv:M.money(cur.cpc), sub:`CTR <b>${M.pct1(cur.ctr)}</b>`},
     {n:"Page views", big:M.int(cur.lpv), bg:"#4a8a0a", ink:"#ffffff",
-      cl:"Custo / Page view", cv:M.money(cur.cpl), sub:`Page view → Checkout <b>${M.pct1(div(cur.ic,cur.lpv))}</b>`},
+      cl:"Custo / Page view", cv:M.money(cur.cpl), sub:`Clique → Page view <b>${M.pct1(div(cur.lpv,cur.clk))}</b>`},
     {n:"Checkouts iniciados", big:M.int(cur.ic), bg:"#356606", ink:"#ffffff",
-      cl:"Custo / Checkout", cv:M.money(cur.cpic), sub:`Checkout → Venda <b>${M.pct1(div(cur.sales,cur.ic))}</b>`},
+      cl:"Custo / Checkout", cv:M.money(cur.cpic), sub:`Page view → Checkout <b>${M.pct1(div(cur.ic,cur.lpv))}</b>`},
     {n:"Vendas", big:M.int(cur.sales), bg:"#244a04", ink:"#ffffff",
-      cl:"CAC", cv:M.money(cur.cac), sub:`ROAS <b>${M.x(cur.roas)}</b> · Conv. total <b>${M.pct1(cur.conv)}</b>`}
+      cl:"CAC", cv:M.money(cur.cac), sub:`Checkout → Venda <b>${M.pct1(div(cur.sales,cur.ic))}</b><br>ROAS <b>${M.x(cur.roas)}</b> · Conv. total <b>${M.pct1(cur.conv)}</b>`}
   ];
   const goal = STATE.goal;
   document.getElementById("funnel").innerHTML = stages.map(s => {
